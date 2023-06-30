@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 //import { Buffer } from 'node:buffer';
 import { Amplify } from 'aws-amplify';
 import { AWSIoTProvider } from '@aws-amplify/pubsub/lib/Providers';
+import ReactLoading from 'react-loading';
 const struct = require('python-struct');
 
 export default function App() {
@@ -11,7 +12,8 @@ export default function App() {
 
   function ListGPSPos({posData}) {
     if (Object.keys(posData).length === 0) {
-      return null;
+      return (
+        <ReactLoading type = "spinningBubbles" color ="#0"/>)
     }
 
      return (Object.keys(posData).map((key) => (
