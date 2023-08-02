@@ -1,36 +1,34 @@
-import React from 'react';
-import './App.css';
+import React from "react";
+import "./App.css";
 import { useState, useEffect } from "react";
-//import { Buffer } from 'node:buffer';
-import { Amplify } from 'aws-amplify';
-import { AWSIoTProvider } from '@aws-amplify/pubsub/lib/Providers';
-import ReactLoading from 'react-loading';
-const struct = require('python-struct');
-
+import { Amplify } from "aws-amplify";
+import { AWSIoTProvider } from "@aws-amplify/pubsub/lib/Providers";
+import ReactLoading from "react-loading";
+import config from "../pubsub.json"
 export default function App() {
-  const [gps1Data, setGps1Data] = useState({});
+  const [gps1Data, setGps1Data] = useState(null);
 
   function ListGPSPos({posData}) {
-    if (Object.keys(posData).length === 0) {
+    if (gps1Data) {
+      console.log("Data received from pubsub=",posData);
+      return (Object.keys(posData).map((key) => (
+        <li key={key}> {posData[key]} </li>
+        )
+    ))}    
+    else {
       return (
         <ReactLoading type = "spinningBubbles" color ="#0"/>)
     }
 
-     return (Object.keys(posData).map((key) => (
-        <li> {key}: {posData[key]} </li>
-        )
-    ))    
   }
   
   function decodeGPSData(input) {
-    let buf = Buffer.from(input.data, 'base64');
     switch (input.fPort)
     {
       case 2:
-        const arr = struct.unpack('llHB',buf), obj = {};
-        [obj.latitude, obj.longitude, obj.hAcc, obj.battery] = arr;
-        obj.latitude *= 0.0000001;
-        obj.longitude *= 0.0000001;
+        const obj = {};
+        obj.data = input.data;
+        obj.fPort = input.fPort;
         setGps1Data(obj);
         break;
       default:
@@ -38,32 +36,43 @@ export default function App() {
   }
 
   useEffect(() => {
+    console.log("----------- BEFORE =>configure(): Amplify=")
+    console.log(...Object.entries(Amplify).flat(20),"\n\n")
     Amplify.configure({
       Auth: {
-        identityPoolId: process.env.REACT_APP_IDENTITY_POOL_ID,
-        region: process.env.REACT_APP_REGION,
-        userPoolId: process.env.REACT_APP_USER_POOL_ID,
-        userPoolWebClientId: process.env.REACT_APP_USER_POOL_WEB_CLIENT_ID
+        identityPoolId: config.REACT_APP_IDENTITY_POOL_ID,
+        region: config.REACT_APP_REGION,
+        userPoolId: config.REACT_APP_USER_POOL_ID,
+        userPoolWebClientId: config.REACT_APP_USER_POOL_WEB_CLIENT_ID
       }
     });
+    console.log("----------- AFTER =>configure(): amplify=",...Object.entries(Amplify).flat(20));
     
-    Amplify.addPluggable(new AWSIoTProvider({
-      aws_pubsub_region: process.env.REACT_APP_REGION,
-      aws_pubsub_endpoint: `wss://${process.env.REACT_APP_MQTT_ID}/mqtt`,
-    }));
+    let iotProvider = new AWSIoTProvider({
+      aws_pubsub_region: config.REACT_APP_REGION,
+      aws_pubsub_endpoint: `wss://${config.REACT_APP_MQTT_ID}/mqtt`,
+    });
+    //console.log("result from new AWSIotProvider: iotProvider=", iotProvider);
+
+    Amplify.addPluggable(iotProvider);
+    //console.log("AFTER =>addPluggable(): Amplify=", Amplify);
     
-    Amplify.PubSub.subscribe('application/Tracking/device/313932316e30740b/rx').subscribe({
+    const subscription = Amplify.PubSub.subscribe("application/Tracking/device/313932316e30740b/rx").subscribe({
       next: data => decodeGPSData(data.value, data.fPort),
       error: error => console.error(error),
-      close: () => console.log('Done'),
+      close: () => console.log("Done"),
     });
+    console.log("After subscription.subscribe... Leaving useEffect()");
     
+    return () => {
+      console.log("Cleanup function from useEffect... unsubscribe()");
+      subscription.unsubscribe();
+    }
   }, []);
   return (
     <>
-      <h1>Realtime Weather2</h1>
-      <ListGPSPos posData = {gps1Data}>
-      </ListGPSPos>
+      <h1>AWS IOT Core test</h1>
+      <ListGPSPos posData = {gps1Data} />
     </>
   );
 };
